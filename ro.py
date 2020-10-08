@@ -191,8 +191,16 @@ def optimize_genetic_alg_hyperparams(fitness):
 def optimize_mimic_hyperparams(fitness):
     # params = { 'fast_mimic': True }
     params = {}
-    if fitness == mlrose.OneMax:
+    if isinstance(fitness, mlrose.OneMax):
         hyperparams = {}
+        params.update(hyperparams)
+        return params
+    elif isinstance(fitness, mlrose.MaxKColor):
+        hyperparams = {}
+        params.update(hyperparams)
+        return params
+    elif isinstance(fitness, mlrose.FourPeaks):
+        hyperparams = { 'pop_size': 1200, 'keep_pct': 0.3 }
         params.update(hyperparams)
         return params
     hyperparams = { 'pop_size': ( [ 100 + 20*i for i in range(11) ], True ),
