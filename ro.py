@@ -5,7 +5,7 @@ import mlrose_hiive as mlrose
 import numpy as np
 import time
 
-SIZE = 20
+SIZE = 60
 
 algs = {
     'hill_climbing': mlrose.random_hill_climb,
@@ -56,6 +56,8 @@ def get_score(alg, problem, params, num_seeds = 30):
         
         fitnesses.append(fitness)
         fitness_curves.append(curve)
+    
+    print(state)
     
     avg_fitness_curve = [ np.mean( [ c[i] for c in fitness_curves ] ) for i in range(min([len(c) for c in fitness_curves])) ]
     return np.mean(fitnesses), avg_fitness_curve
@@ -159,9 +161,11 @@ def optimize_hyperparams(title, alg, fitness, params, hyperparams):
     return best_hyperparams
 
 def optimize_hill_climbing_hyperparams(fitness):
-    params = { 'max_attempts': 100,
-               'max_iters': 100,
-               'restarts': 20 }
+    # params = { 'max_attempts': 100,
+            #    'max_iters': 100,
+            #    'restarts': 20 }
+    params = { 'max_attempts': 200, 'restarts': 2000 }
+    # mlrose.random_hill_climb()
     hyperparams = {}
     return params
     # return optimize_hyperparams( 'Random Hill Climbing', mlrose.random_hill_climb, fitness, params )
