@@ -4,6 +4,15 @@ import matplotlib.pyplot as plt
 import mlrose_hiive as mlrose
 import numpy as np
 
+SIZE = 20
+
+algs = {
+    'hill_climbing': mlrose.random_hill_climb,
+    'simulated_annealing': mlrose.simulated_annealing,
+    'genetic_alg': mlrose.genetic_alg,
+    'mimic': mlrose.mimic
+}
+
 # Define alternative N-Queens fitness function for maximization problem
 def queens_max(state):
     
@@ -28,34 +37,84 @@ def queens_max(state):
 #       while RHC and annealing are likely to get stuck in the local optima with bigger basins (all 1s or all 0s).
 #       annealing and RHC will perform well on onemax because there is only one optimum and it's global (wide basin).
 #       MIMIC will perform best on kcolor, per Charles Isbell's paper
+# call_counter_array = np.zeros(100)
+# call_counter_idx = 0
+
+fitness_evals = []
 
 def get_score(alg, problem, params, num_seeds = 30):
     fitnesses = []
     fitness_curves = []
     for random_seed in range(1,num_seeds+1):
         params.update({'random_state': random_seed, 'curve': True})
+
+        global fitness_evals
+        fitness_evals = []
+
         state, fitness, curve = alg(**params)
+        
         fitnesses.append(fitness)
         fitness_curves.append(curve)
-        # print(curve)
-
+    
     avg_fitness_curve = [ np.mean( [ c[i] for c in fitness_curves ] ) for i in range(min([len(c) for c in fitness_curves])) ]
     return np.mean(fitnesses), avg_fitness_curve
 
-def get_hyperparam_score(alg, problem, params):
-    fitness, curve = get_score(alg, problem, params, 20)
-    return fitness
+# def get_hyperparam_score(alg, problem, params):
+#     fitness, curve = get_score(alg, problem, params, 20)
+#     return fitness
 
-SIZE = 20
+def get_hyperparam_score(alg, problem, params, num_seeds = 20):
+    fitnesses = []
+    for random_seed in range(1, num_seeds+1):
+        params.update({'random_state': random_seed, 'curve': True})
+        state, fitness, curve = alg(**params)
+        fitnesses.append(fitness)
 
-def find_best_hyperparameter(alg, fitness, param_name, possible_values, show_graph = True):
+    return np.mean(fitnesses)
+
+def get_fitness_eval_curve():
+    fitness_eval_x = []
+    fitness_eval_y = []
+    maximum = 0
+    for i in range(len(fitness_evals)):
+        if fitness_evals[i] > maximum:
+            maximum = fitness_evals[i]
+            fitness_eval_x.append(i)
+            fitness_eval_y.append(fitness_evals[i])
+    return fitness_eval_x, fitness_eval_y
+
+def get_final_score(learner, fitness, hyperparams):
+    problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
+    params = hyperparams.copy()
+    params.update({'problem': problem})
+    score, curve = get_score(alg, problem, params)
+
+    print( 'Average Best Score:', score )
+
+    plt.plot( curve )
+    plt.xlabel( 'Iterations' )
+    plt.ylabel( 'Average Fitness Score' )
+    plt.suptitle( learner )
+    plt.show()
+
+    x, y = get_fitness_eval_curve()
+    plt.plot(x, y)
+    plt.xlabel( 'Fitness Function Evaluations' )
+    plt.ylabel( 'Fitness Score' )
+    plt.suptitle( learner )
+    plt.show()
+    return score
+
+def find_best_hyperparameter(alg, fitness, params, param_name, possible_values, show_graph = True):
     best_avg_score = 0
     best_val = None
     scores = []
     for v in possible_values:
         problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
-        params = {param_name: v, 'problem': problem}
-        score = get_hyperparam_score(alg, problem, params)
+        problem.set_mimic_fast_mode( True )
+        cur_params = params.copy()
+        cur_params.update({param_name: v, 'problem': problem})
+        score = get_hyperparam_score(alg, problem, cur_params)
         scores.append(score)
         if score > best_avg_score:
             best_avg_score = score
@@ -71,46 +130,72 @@ def find_best_hyperparameter(alg, fitness, param_name, possible_values, show_gra
 
     return best_val        
 
-def optimize_hyperparams(title, alg, fitness, params):
-    hyperparams = {}
-    for param_name, (possible_values, show_graph) in params.items():
+def optimize_hyperparams(title, alg, fitness, params, hyperparams):
+    best_hyperparams = {}
+    for param_name, (possible_values, show_graph) in hyperparams.items():
         print( 'optimizing hyperparameter %s' % param_name )
-        hyperparams[param_name] = find_best_hyperparameter(alg, fitness, param_name, possible_values, show_graph)
-        print( 'optimal value found: %s' % hyperparams[param_name] )
+        best_hyperparams[param_name] = find_best_hyperparameter(alg, fitness, params, param_name, possible_values, show_graph)
+        print( 'optimal value found: %s' % best_hyperparams[param_name] )
     
-    print('parameters optimized. plotting learning curve with optimal params.')
+    print('parameters optimized.')
+    
+    # print('parameters optimized. plotting learning curve with optimal params.')
 
-    problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
-    temp_params = hyperparams.copy()
-    temp_params.update({'problem': problem})
-    score, curve = get_score(alg, problem, temp_params)
-    print('Score:', score)
-    plt.plot( curve )
-    plt.xlabel( 'Iterations' )
-    plt.ylabel( 'Average fitness score' )
-    plt.suptitle( title )
-    plt.show()
+    # problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
+    # temp_params = hyperparams.copy()
+    # temp_params.update({'problem': problem})
+    # score, curve = get_score(alg, problem, temp_params)
+    # print('Score:', score)
+    # plt.plot( curve )
+    # plt.xlabel( 'Iterations' )
+    # plt.ylabel( 'Average fitness score' )
+    # plt.suptitle( title )
+    # plt.show()
     
-    return hyperparams
+    return best_hyperparams
 
 def optimize_hill_climbing_hyperparams(fitness):
-    params = { 'max_attempts': ( [ 100 ], False ),
-               'max_iters': ( [ 100 ], False ),
-               'restarts': ( [ 20 ], False ) }
-    return optimize_hyperparams( 'Random Hill Climbing', mlrose.random_hill_climb, fitness, params )
+    params = { 'max_attempts': 100,
+               'max_iters': 100,
+               'restarts': 20 }
+    return params
+    # return optimize_hyperparams( 'Random Hill Climbing', mlrose.random_hill_climb, fitness, params )
 
 def optimize_simulated_annealing_hyperparams(fitness):
-    params = { 'max_attempts': ( [ 100 ], False ),
-               'max_iters': ( [ 1000 ], False ) }
-    return optimize_hyperparams( 'Simulated Annualing', mlrose.simulated_annealing, fitness, params )
+    params = { 'max_attempts': 100,
+               'max_iters': 1000 }
+    hyperparams = {}
+    return params
+    # return optimize_hyperparams( 'Simulated Annualing', mlrose.simulated_annealing, fitness, params )
 
 def optimize_genetic_alg_hyperparams(fitness):
-    params = { 'max_attempts': ( [ 100 ], False ),
-               'pop_size': ( [ 100 + 20*i for i in range(11) ], True ),
-               'pop_breed_percent': ( [ 0.7 + 0.01*i for i in range(11) ], True ),
-               'elite_dreg_ratio': ( [ 0.95 + 0.01*i for i in range(5) ], True ),
-               'mutation_prob': ( [ 0.2 * i for i in range(1, 5) ], True ) }
-    return optimize_hyperparams( 'Genetic Alg', mlrose.genetic_alg, fitness, params )
+    params = { 'max_attempts': 100 }
+    hyperparams = { 'pop_size': ( [ 100 + 20*i for i in range(11) ], True ),
+                    'pop_breed_percent': ( [ 0.7 + 0.01*i for i in range(11) ], True ),
+                    'elite_dreg_ratio': ( [ 0.95 + 0.01*i for i in range(5) ], True ),
+                    'mutation_prob': ( [ 0.2 * i for i in range(1, 5) ], True ) }
+    
+    optimized = optimize_hyperparams( 'Genetic Alg', mlrose.genetic_alg, fitness, params, hyperparams )
+    params.update(optimized)
+    return params
+
+def optimize_mimic_hyperparams(fitness):
+    # params = { 'fast_mimic': True }
+    params = {}
+    hyperparams = { 'pop_size': ( [ 100 + 20*i for i in range(11) ], True ),
+                    'keep_pct': ( [ 0.1 + 0.02*i for i in range(11) ], True ) }
+    
+    optimized = optimize_hyperparams( 'MIMIC', mlrose.mimic, fitness, params, hyperparams )
+    params.update(optimized)
+    return params
+
+def get_custom_fitness(fitness):
+    def counting_fitness(state):
+        global fitness_evals
+        score = fitness.evaluate(state)
+        fitness_evals.append( score )
+        return score
+    return counting_fitness
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -123,13 +208,10 @@ if __name__ == '__main__':
 
     if args.problem == 'queens':
         fitness = mlrose.CustomFitness(queens_max)
-        problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True, max_val = size)
     elif args.problem == 'onemax':
         fitness = mlrose.OneMax()
-        problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
     elif args.problem == 'four_peaks':
         fitness = mlrose.FourPeaks(t_pct = 0.15)
-        problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
     elif args.problem == 'kcolor':
         edges = [(0, 1), (0, 2), (0, 4), (1, 3), (2, 0), (2, 3), (3, 4)]
         fitness = mlrose.MaxKColor(edges)
@@ -140,13 +222,27 @@ if __name__ == '__main__':
 
     if args.learner == 'hill_climbing':
         hyperparams = optimize_hill_climbing_hyperparams(fitness)
-        print( 'found hyperparams:', hyperparams )
-    if args.learner == 'simulated_annealing':
+    elif args.learner == 'simulated_annealing':
         hyperparams = optimize_simulated_annealing_hyperparams(fitness)
-        print( 'found hyperparams:', hyperparams )
-    if args.learner == 'genetic_alg':
+    elif args.learner == 'genetic_alg':
         hyperparams = optimize_genetic_alg_hyperparams(fitness)
-        print( 'found hyperparams:', hyperparams )
+    elif args.learner == 'mimic':
+        hyperparams = optimize_mimic_hyperparams(fitness)
+    else:
+        raise RuntimeError("Invalid learner argument")
+
+    # hyperparams = {'max_attempts': 100, 'mutation_prob': 0.4}
+
+    print( 'found hyperparams:', hyperparams )
+
+    custom_fitness_function = get_custom_fitness(fitness)
+    custom_fitness = mlrose.CustomFitness(custom_fitness_function)
+
+    alg = algs[args.learner]
+    
+    get_final_score(args.learner, custom_fitness, hyperparams)
+    
+    # print( 'call counter array:', call_counter_array )
         # avg_best_score, avg_fitness_curve = get_score()
 
     # best_fitnesses = []
