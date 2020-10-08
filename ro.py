@@ -3,6 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import mlrose_hiive as mlrose
 import numpy as np
+import time
 
 SIZE = 20
 
@@ -87,9 +88,12 @@ def get_final_score(learner, fitness, hyperparams):
     problem = mlrose.DiscreteOpt(length = SIZE, fitness_fn = fitness, maximize = True)
     params = hyperparams.copy()
     params.update({'problem': problem})
-    score, curve = get_score(alg, problem, params)
 
-    print( 'Average Best Score:', score )
+    start = time.process_time()
+    score, curve = get_score(alg, problem, params)
+    print( 'Time taken to learn:', time.process_time() - start )
+
+    print( 'Average Best Score over 30 random seeds:', score )
 
     plt.plot( curve )
     plt.xlabel( 'Iterations' )
@@ -158,6 +162,7 @@ def optimize_hill_climbing_hyperparams(fitness):
     params = { 'max_attempts': 100,
                'max_iters': 100,
                'restarts': 20 }
+    hyperparams = {}
     return params
     # return optimize_hyperparams( 'Random Hill Climbing', mlrose.random_hill_climb, fitness, params )
 
@@ -170,6 +175,10 @@ def optimize_simulated_annealing_hyperparams(fitness):
 
 def optimize_genetic_alg_hyperparams(fitness):
     params = { 'max_attempts': 100 }
+    if fitness == mlrose.OneMax:
+        hyperparams = { 'pop_breed_percent': 0.7 }
+        params.update(hyperparams)
+        return params
     hyperparams = { 'pop_size': ( [ 100 + 20*i for i in range(11) ], True ),
                     'pop_breed_percent': ( [ 0.7 + 0.01*i for i in range(11) ], True ),
                     'elite_dreg_ratio': ( [ 0.95 + 0.01*i for i in range(5) ], True ),
@@ -182,6 +191,10 @@ def optimize_genetic_alg_hyperparams(fitness):
 def optimize_mimic_hyperparams(fitness):
     # params = { 'fast_mimic': True }
     params = {}
+    if fitness == mlrose.OneMax:
+        hyperparams = {}
+        params.update(hyperparams)
+        return params
     hyperparams = { 'pop_size': ( [ 100 + 20*i for i in range(11) ], True ),
                     'keep_pct': ( [ 0.1 + 0.02*i for i in range(11) ], True ) }
     
